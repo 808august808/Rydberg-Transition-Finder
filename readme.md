@@ -1,8 +1,12 @@
 # ⚛️ Rydberg Transition Finder
 
-A Streamlit application for exploring alkali Rydberg–Rydberg transitions within a specified RF frequency range and calculating the optical wavelengths required to reach a selected Rydberg state.
+Interactive tool for exploring alkali Rydberg–Rydberg transitions and determining the corresponding optical ladder.
 
 The application uses the [ARC (Alkali Rydberg Calculator)](https://arc-alkali-rydberg-calculator.readthedocs.io/) package for atomic-structure calculations.
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rydberg-transition-finder.streamlit.app)
+
+[▶ Launch Web App](https://rydberg-transition-finder.streamlit.app)
 
 ## Features
 
@@ -25,7 +29,7 @@ For example, to investigate cesium transitions near 18–20 GHz:
 2. Set the RF frequency range to **17.6–20.0 GHz**
 3. Set the Rydberg-state range to **n = 20–50**
 4. Search for transitions
-5. Select a candidate Rydberg–Rydberg transition
+5. Select a candidate Rydberg transition
 6. View the corresponding optical ladder
 
 For Cs-133, the optical ladder is calculated as:
@@ -52,7 +56,7 @@ The application reports the wavelengths required for the probe and coupling lase
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/Rydberg-Transition-Finder.git
+git clone https://github.com/808august808/Rydberg-Transition-Finder.git
 cd Rydberg-Transition-Finder
 ```
 
@@ -94,7 +98,7 @@ http://localhost:8501
 
 The application uses ARC to calculate atomic transition frequencies and wavelengths.
 
-The RF transition search considers the Rydberg states included in the application configuration:
+The RF transition search considers the following Rydberg states:
 
 * S1/2
 * P1/2
