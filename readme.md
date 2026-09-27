@@ -133,6 +133,10 @@ Additional effects such as hyperfine structure, Zeeman shifts, AC Stark shifts, 
 
 The transition table can be exported as a CSV file for further analysis.
 
+## AI-Assisted Development
+
+Generative AI tools, including OpenAI's ChatGPT, were used during development for programming assistance, debugging, documentation, and code review. The author reviewed and evaluated the resulting code and scientific calculations.
+
 ## Development
 
 This project is intended as a research and educational tool for exploring Rydberg-atom transitions and assisting with experimental planning.
