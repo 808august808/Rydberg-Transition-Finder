@@ -228,6 +228,9 @@ def get_rf_transitions(
 
     Duplicate transitions are removed by using each unordered
     pair of states only once.
+
+    State 1 and State 2 describe the two members of the
+    transition pair and do not imply energy ordering.
     """
 
     results = []
@@ -314,13 +317,13 @@ def get_rf_transitions(
 
             results.append(
                 {
-                    "Lower State": state_label(
+                    "State 1": state_label(
                         n1,
                         l1,
                         j1,
                     ),
 
-                    "Upper State": state_label(
+                    "State 2": state_label(
                         n2,
                         l2,
                         j2,
@@ -336,13 +339,13 @@ def get_rf_transitions(
 
                     "E1 Allowed": e1_allowed,
 
-                    "n Lower": n1,
-                    "l Lower": l1,
-                    "j Lower": j1,
+                    "n State 1": n1,
+                    "l State 1": l1,
+                    "j State 1": j1,
 
-                    "n Upper": n2,
-                    "l Upper": l2,
-                    "j Upper": j2,
+                    "n State 2": n2,
+                    "l State 2": l2,
+                    "j State 2": j2,
                 }
             )
 
@@ -698,12 +701,12 @@ if "transitions" in st.session_state:
             {
                 "ID": i,
 
-                "Lower State": (
-                    transition["Lower State"]
+                "State 1": (
+                    transition["State 1"]
                 ),
 
-                "Upper State": (
-                    transition["Upper State"]
+                "State 2": (
+                    transition["State 2"]
                 ),
 
                 "RF Frequency (GHz)": round(
@@ -763,8 +766,8 @@ if "transitions" in st.session_state:
         )
 
         label = (
-            f"{transition['Lower State']} → "
-            f"{transition['Upper State']} "
+            f"{transition['State 1']} ↔ "
+            f"{transition['State 2']} "
             f"("
             f"{transition['RF Frequency (GHz)']:.6f}"
             f" GHz, {e1_label})"
@@ -803,16 +806,16 @@ if "transitions" in st.session_state:
     with col1:
 
         st.metric(
-            "Lower State",
-            selected["Lower State"],
+            "State 1",
+            selected["State 1"],
         )
 
 
     with col2:
 
         st.metric(
-            "Upper State",
-            selected["Upper State"],
+            "State 2",
+            selected["State 2"],
         )
 
 
@@ -847,9 +850,9 @@ if "transitions" in st.session_state:
 
 
     rydberg_state = (
-        selected["n Upper"],
-        selected["l Upper"],
-        selected["j Upper"],
+        selected["n State 2"],
+        selected["l State 2"],
+        selected["j State 2"],
     )
 
 
@@ -891,7 +894,7 @@ if "transitions" in st.session_state:
     )
 
     rydberg_label = (
-        selected["Upper State"]
+        selected["State 2"]
     )
 
 
@@ -965,7 +968,7 @@ if "transitions" in st.session_state:
         ↓ **RF:** \
         {selected["RF Frequency (GHz)"]:.6f} GHz
 
-        ### {selected["Lower State"]}
+        ### {selected["State 1"]}
         """
     )
 
