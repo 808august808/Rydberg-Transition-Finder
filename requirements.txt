@@ -1,0 +1,3 @@
+streamlit>=1.40
+pandas>=2.0
+ARC-Alkali-Rydberg-Calculator>=3.8.0
