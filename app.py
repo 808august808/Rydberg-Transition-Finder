@@ -203,6 +203,135 @@ def transition_wavelength_nm(
     return abs(wavelength_m) * 1e9
 
 
+def rf_dipole_matrix_element(
+    atom,
+    n1,
+    l1,
+    j1,
+    n2,
+    l2,
+    j2,
+    mj=0.5,
+    q=0,
+):
+    """
+    Calculate the RF dipole matrix element for a specified
+    magnetic sublevel and polarization.
+
+    Default:
+        mj = +1/2
+        q = 0 (pi-polarized RF)
+
+    ARC returns the matrix element in units of a0*e.
+    """
+    try:
+        dipole = atom.getDipoleMatrixElement(
+            n1,
+            l1,
+            j1,
+            mj,
+            n2,
+            l2,
+            j2,
+            mj + q,
+            q,
+        )
+        return abs(dipole)
+    except Exception:
+        return None
+
+
+def rf_rabi_frequency_mhz(
+    atom,
+    n1,
+    l1,
+    j1,
+    n2,
+    l2,
+    j2,
+    electric_field_v_m,
+    mj=0.5,
+    q=0,
+):
+    """
+    Calculate the RF Rabi frequency for a specified RF electric
+    field amplitude.
+
+    The default is pi-polarized RF (q=0) with mj=+1/2.
+
+    ARC returns angular frequency in rad/s, so this function
+    converts the result to MHz.
+    """
+    try:
+        omega = atom.getRabiFrequency2(
+            n1,
+            l1,
+            j1,
+            mj,
+            n2,
+            l2,
+            j2,
+            q,
+            electric_field_v_m,
+        )
+        return abs(omega) / (2 * 3.141592653589793) / 1e6
+    except Exception:
+        return None
+
+
+# ============================================================
+# Optical ladder helpers
+# ============================================================
+
+def get_ladder_rydberg_state(
+    species,
+    transition,
+):
+    """
+    Choose the Rydberg state that can be reached by the standard
+    ground -> P3/2 -> Rydberg optical ladder.
+
+    For an E1-allowed RF transition, the optically accessible
+    member is preferred. If both/neither are accessible, State 2
+    is used as the fallback so that non-E1 transitions can still
+    be displayed.
+    """
+    intermediate = INTERMEDIATE_STATES[species]
+    _, intermediate_l, intermediate_j = intermediate
+
+    state1 = (
+        transition["n State 1"],
+        transition["l State 1"],
+        transition["j State 1"],
+    )
+    state2 = (
+        transition["n State 2"],
+        transition["l State 2"],
+        transition["j State 2"],
+    )
+
+    state1_accessible = allowed_e1_transition(
+        intermediate_l,
+        intermediate_j,
+        state1[1],
+        state1[2],
+    )
+    state2_accessible = allowed_e1_transition(
+        intermediate_l,
+        intermediate_j,
+        state2[1],
+        state2[2],
+    )
+
+    if state1_accessible and not state2_accessible:
+        return state1
+
+    if state2_accessible and not state1_accessible:
+        return state2
+
+    return state2
+
+
 # ============================================================
 # RF transition search
 # ============================================================
@@ -315,6 +444,26 @@ def get_rf_transitions(
                 j2,
             )
 
+            # ------------------------------------------------
+            # RF dipole matrix element
+            # ------------------------------------------------
+            #
+            # For relative comparison we use a fixed convention:
+            # mj = +1/2 and q = 0 (pi-polarized RF).
+            #
+            # The exact Rabi frequency depends on the RF field
+            # amplitude, polarization, and magnetic sublevels, so
+            # the table uses a normalized relative value instead.
+            rf_dipole = rf_dipole_matrix_element(
+                atom,
+                n1,
+                l1,
+                j1,
+                n2,
+                l2,
+                j2,
+            )
+
             results.append(
                 {
                     "State 1": state_label(
@@ -337,6 +486,8 @@ def get_rf_transitions(
                         wavelength_m * 1e3
                     ),
 
+                    "RF Dipole Moment (ea0)": rf_dipole,
+
                     "E1 Allowed": e1_allowed,
 
                     "n State 1": n1,
@@ -348,6 +499,35 @@ def get_rf_transitions(
                     "j State 2": j2,
                 }
             )
+
+    # --------------------------------------------------------
+    # Relative RF coupling strength
+    # --------------------------------------------------------
+    #
+    # Normalize to the strongest RF dipole matrix element found
+    # in the current search. The strongest transition = 100.
+    # This is intended only for relative comparison.
+    valid_dipoles = [
+        t["RF Dipole Moment (ea0)"]
+        for t in results
+        if t["RF Dipole Moment (ea0)"] is not None
+    ]
+
+    if valid_dipoles:
+        max_dipole = max(valid_dipoles)
+
+        for t in results:
+            dipole = t["RF Dipole Moment (ea0)"]
+
+            if dipole is None or max_dipole == 0:
+                t["Relative RF Coupling (%)"] = None
+            else:
+                t["Relative RF Coupling (%)"] = (
+                    100.0 * dipole / max_dipole
+                )
+    else:
+        for t in results:
+            t["Relative RF Coupling (%)"] = None
 
     # --------------------------------------------------------
     # Sort results by frequency
@@ -467,6 +647,21 @@ n_max = st.sidebar.number_input(
 )
 
 
+rf_field = st.sidebar.number_input(
+    "RF electric field for Rabi frequency (V/m)",
+    min_value=0.001,
+    max_value=100000.0,
+    value=1.0,
+    step=0.1,
+    format="%.3f",
+    help=(
+        "Used only for the selected-transition Rabi frequency. "
+        "The table's relative RF coupling is independent of "
+        "this value."
+    ),
+)
+
+
 # ------------------------------------------------------------
 # Transition filter
 # ------------------------------------------------------------
@@ -557,6 +752,8 @@ if search_button:
 
     st.session_state["search_n_max"] = n_max
 
+    st.session_state["rf_field"] = rf_field
+
 
 # ============================================================
 # Display search results
@@ -583,6 +780,11 @@ if "transitions" in st.session_state:
     search_n_max = st.session_state[
         "search_n_max"
     ]
+
+    search_rf_field = st.session_state.get(
+        "rf_field",
+        1.0,
+    )
 
     st.header(
         "Rydberg–Rydberg Transitions"
@@ -691,11 +893,35 @@ if "transitions" in st.session_state:
     # Convert results to DataFrame
     # ========================================================
 
+    atom = ATOMS[species]()
+
     display_data = []
 
     for i, transition in enumerate(
         filtered_transitions
     ):
+        ladder_state = get_ladder_rydberg_state(
+            species,
+            transition,
+        )
+
+        try:
+            ladder = get_optical_ladder(
+                atom,
+                species,
+                ladder_state,
+            )
+        except Exception:
+            ladder = {
+                "probe_wavelength_nm": None,
+                "coupling_wavelength_nm": None,
+            }
+
+        ladder_label = (
+            f"{GROUND_LABELS[species]} → "
+            f"{INTERMEDIATE_LABELS[species]} → "
+            f"{state_label(*ladder_state)}"
+        )
 
         display_data.append(
             {
@@ -716,11 +942,45 @@ if "transitions" in st.session_state:
                     6,
                 ),
 
-                "RF Wavelength (mm)": round(
-                    transition[
-                        "RF Wavelength (mm)"
-                    ],
-                    4,
+                "Relative RF Coupling (%)": (
+                    round(
+                        transition[
+                            "Relative RF Coupling (%)"
+                        ],
+                        1,
+                    )
+                    if transition[
+                        "Relative RF Coupling (%)"
+                    ] is not None
+                    else None
+                ),
+
+                "Ladder": ladder_label,
+
+                "Probe λ (nm)": (
+                    round(
+                        ladder[
+                            "probe_wavelength_nm"
+                        ],
+                        6,
+                    )
+                    if ladder[
+                        "probe_wavelength_nm"
+                    ] is not None
+                    else None
+                ),
+
+                "Coupling λ (nm)": (
+                    round(
+                        ladder[
+                            "coupling_wavelength_nm"
+                        ],
+                        6,
+                    )
+                    if ladder[
+                        "coupling_wavelength_nm"
+                    ] is not None
+                    else None
                 ),
 
                 "E1 Selection Rule": (
@@ -743,15 +1003,26 @@ if "transitions" in st.session_state:
         hide_index=True,
     )
 
+    st.caption(
+        "Relative RF coupling is normalized to the strongest "
+        "transition found in the current search (100%). It is "
+        "intended for comparing transitions, not as an absolute "
+        "coupling measurement."
+    )
+
 
     # ========================================================
     # Select transition
     # ========================================================
 
     st.header(
-        "Optical Ladder"
+        "Select Transition"
     )
 
+    st.caption(
+        "Use the ID from the results table to quickly locate "
+        "a transition here."
+    )
 
     transition_options = {}
 
@@ -766,6 +1037,7 @@ if "transitions" in st.session_state:
         )
 
         label = (
+            f"ID {i} — "
             f"{transition['State 1']} ↔ "
             f"{transition['State 2']} "
             f"("
@@ -799,28 +1071,40 @@ if "transitions" in st.session_state:
         "Selected RF Transition"
     )
 
+    selected_dipole = selected[
+        "RF Dipole Moment (ea0)"
+    ]
+
+    selected_rabi_mhz = rf_rabi_frequency_mhz(
+        atom,
+        selected["n State 1"],
+        selected["l State 1"],
+        selected["j State 1"],
+        selected["n State 2"],
+        selected["l State 2"],
+        selected["j State 2"],
+        search_rf_field,
+    )
+
+    selected_relative = selected[
+        "Relative RF Coupling (%)"
+    ]
 
     col1, col2, col3, col4 = st.columns(4)
 
-
     with col1:
-
         st.metric(
             "State 1",
             selected["State 1"],
         )
 
-
     with col2:
-
         st.metric(
             "State 2",
             selected["State 2"],
         )
 
-
     with col3:
-
         st.metric(
             "RF Frequency",
             (
@@ -829,9 +1113,7 @@ if "transitions" in st.session_state:
             ),
         )
 
-
     with col4:
-
         st.metric(
             "E1 Selection Rule",
             (
@@ -841,18 +1123,63 @@ if "transitions" in st.session_state:
             ),
         )
 
+    st.markdown("#### RF Coupling")
+
+    rf_col1, rf_col2, rf_col3, rf_col4 = st.columns(4)
+
+    with rf_col1:
+        st.metric(
+            "RF Wavelength",
+            (
+                f"{selected['RF Wavelength (mm)']:.4f}"
+                " mm"
+            ),
+        )
+
+    with rf_col2:
+        st.metric(
+            "RF Dipole Moment",
+            (
+                f"{selected_dipole:.3f} ea₀"
+                if selected_dipole is not None
+                else "N/A"
+            ),
+        )
+
+    with rf_col3:
+        st.metric(
+            "Relative RF Coupling",
+            (
+                f"{selected_relative:.1f}%"
+                if selected_relative is not None
+                else "N/A"
+            ),
+        )
+
+    with rf_col4:
+        st.metric(
+            f"Rabi Frequency @ {search_rf_field:g} V/m",
+            (
+                f"{selected_rabi_mhz:.3f} MHz"
+                if selected_rabi_mhz is not None
+                else "N/A"
+            ),
+        )
+
+    st.caption(
+        "Relative RF coupling is normalized to the strongest "
+        "transition in the current search (100%). The displayed "
+        "Rabi frequency assumes π-polarized RF (q = 0) and "
+        "m_j = +1/2, using the RF field entered in the sidebar."
+    )
 
     # ========================================================
     # Calculate optical ladder
     # ========================================================
 
-    atom = ATOMS[species]()
-
-
-    rydberg_state = (
-        selected["n State 2"],
-        selected["l State 2"],
-        selected["j State 2"],
+    rydberg_state = get_ladder_rydberg_state(
+        species,
+        selected,
     )
 
 
@@ -893,8 +1220,8 @@ if "transitions" in st.session_state:
         INTERMEDIATE_LABELS[species]
     )
 
-    rydberg_label = (
-        selected["State 2"]
+    rydberg_label = state_label(
+        *rydberg_state
     )
 
 
@@ -968,7 +1295,9 @@ if "transitions" in st.session_state:
         ↓ **RF:** \
         {selected["RF Frequency (GHz)"]:.6f} GHz
 
-        ### {selected["State 1"]}
+        ### Other RF state
+
+        **{selected["State 1"] if rydberg_label == selected["State 2"] else selected["State 2"]}**
         """
     )
 
